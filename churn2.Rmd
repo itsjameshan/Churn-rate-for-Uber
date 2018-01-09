@@ -1,0 +1,738 @@
+---
+title: "Churn Prediction"
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document: default
+---
+A San Francisco-based ride sharing company is interested in predicting rider churn. To help explore this question, we have
+provided a sample dataset of a cohort of users who signed up for an account in January 2014. The data was pulled several
+months later; we consider a user retained if they were “active” (i.e. took a trip) in the preceding 30 days (from the day the
+data was pulled). Assume the latest day of last_trip_date to be when the data was pulled. * The data is churn.csv .
+
+Here is a detailed description of the data:
+
+`city: city this user signed up in`
+`phone: primary device for this user`
+`signup_date: date of account registration; in the form YYYYMMDD`
+`last_trip_date: the last time this user completed a trip; in the form YYYYMMDD`
+`avg_dist: the average distance (in miles) per trip taken in the first 30 days after signup`
+`avg_rating_by_driver: the rider’s average rating over all of their trips`
+`avg_rating_of_driver: the rider’s average rating of their drivers over all of their trips`
+`surge_pct: the percent of trips taken with surge multiplier > 1`
+`avg_surge: The average surge multiplier over all of this user’s trips`
+`trips_in_first_30_days: the number of trips this user took in the first 30 days after signing up`
+`luxury_car_user: TRUE if the user took a luxury car in their first 30 days; FALSE otherwise`
+`weekday_pct: the percent of the user’s trips occurring during a weekday`
+
+We would like you to use this data set to help understand what factors are the best predictors for churn, and offer
+suggestions to operationalize those insights to help this ride sharing company. Therefore, your task is not only to build a
+model that minimizes error, but also a model that allows you to interpret the factors that contributed to your predictions.
+
+Work Flow
+
+Step 1. Perform any cleaning, exploratory analysis, and/or visualizations to use the provided. data for this analysis.
+
+Step 2. Build a predictive model to help determine whether or not a user will churn.
+
+Step 3. Evaluate the model.
+
+Step 4. Identify / interpret features that are the most influential in affecting your predictions.
+
+Step 5. Discuss the validity of your model.
+
+
+Deliverables
+
+Code you used to clean data, explore data, build model, validate the model. Documentations, including the following points:
+
+*How did you computed the features and target?*
+
+I create several new categorical features, such as surge_or_not, used_or_not_30days, weekday_bucket (zero, soso, everyday). Meanwhile, I also transform the three city feature columns to city column where contains 3 classes. And did the same for phone. At last, I re-classcify the churn from 1/0 to churn/not_churn. Because if it is 1 or 0, it will cause error on the caret package train function when we assign a variable to 0 (e.g. 0 <- a)
+
+*What model did you use in the end? Why?*
+
+I used xgboost for the churn prediction. One of the reason is gradient  boosting method are relative fast in runing time compared with random forest.
+And gradient  boosting build tree one after another, so each new tree helps to correct errors made by previously trained tree.
+In contrast, random forest train each tree independently. However, gradient boosting method is more easier to over-fitting compared with random forest, so need to be careful when using it.
+
+*Alternative models you have considered. Why are they not good enough?*
+
+Random forest is another model I have considered. Due to the runing time is mcuh slow than xgboost and GBM, and some research on advantage/disadvantage of random forest vs. gradient boosting method, I eventually did not choose random forest. Although I used one random forest method for feature selection since I have use this method before and the selected features are good for my model.
+
+*What performance metric did you use? Why?*
+
+I used ROC curve and AUC. Because ROC is one of the most common binary classifiers.
+To identify if the model can predict churn or not, we can use ROC curve and AUC are evaluation metrics to quantify how predictive the model is. Meanwhile, use the Accuracy to access the model (accuracy = TP+TN/TP+FP+FN+TN) T means true, P means positive, F means false, N means Negative. 
+
+*Based on insights from the model, actionable plans to reduce churn.*
+
+Based on the model prediction and feature selection, I found the top features for the model are `city, phone, avg_rating_by_driver, weekday_bucket, luxury_car_user, surge_pct`.
+Address the weekday_prc user who is zero, target a particular time such as morning work hour and afternoon take off hours to run ads.
+Reallocation the rider resource to city Kinginland which is the city has the lowest churn rate.
+Re-desgin the rating system for encouraging a driver to rate user more reliable ways.
+Thinking the retention of a churned user who used the service quite often. How to keep them engaging them the service.
+
+*Discussion for the results*
+The most important factors from this study showed may be `city` (location), and customized user engagement service (`weekday_prt`,`luxury_car_user`,`surge_pct`). The location matter which means for place like KinginLand will have more user keep the service than other two cities. The ride-share company should provice more luxury car and surge service on city like KinginLand rather than other two cities. Especially focusing on how to get a new user start to use the service. Once use the service, it's possible to form a habit of use the service for a relatively long term. There is probabaly the churn group has more users not used the service at all in the first 30 days users. Because they registered the service for just be curious but not actually want to use it on a daily base. Last but not the lest, most of user are iPhone user, improve the app in iPhone is important to keep those user and reducing churn.
+
+*Thoughts about how this related to BitTiger*
+Regarding to what this insight can help BitTiger, the rating system is important for end-user. We should interact with our customers more to get more reliable feedback data.
+The city (location) matters. Deploy the most of resource to the platform or geo-area to attract more customers is practical.
+We can fiture out the distribution of user's phone type (iPhone vs. Android) and optimize the user experience on BitTiger on the phone plateform.
+Try to move a zero day user (a user who does not click any of ther links BitTiger post on Wetchat, YouTube, or other social media channels) to a frequent user (click the links a lot and watched a ton of video and webinar from BitTiger) by customized ads in WeChat. Forming a habit is important. It may be a major swifter between churn and not churn.
+
+*My conlusions:*
+1. The model using xbgboost can predict the churn by around 78% accuracy with 0.84 AUC. The selected features prediction results (6 selected features:) a similar result compared with all features included for prediction. This indicates if I fine tune the hyperparameters and increase the iterations with those selected features, still have a chance to increase the model accuracy.
+2. This rider-share company (a.k.a Uber) not sale rides, it sales time. More specifically, it sales the perception of time. It would be intersting to see the timestamp data and how it play out with different features.
+
+
+Below are two functions for some visulization.
+```{r}
+##### function.1
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  require(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+##### function 2.
+see_distribution <- function(){
+  require(ggplot2)
+  p1 <-  df %>%
+    ggplot(aes(churn, fill = churn)) +
+    geom_bar() +
+    theme(legend.position = "none")
+  
+  p2 <- df %>%
+    ggplot(aes(avg_dist, fill = churn)) +
+    geom_density() +
+    theme(legend.position = "none") 
+  
+  p3 <- df %>%
+    ggplot(aes(avg_rating_by_driver, fill = churn)) +
+    geom_bar() +
+    theme(legend.position = "none") +
+    scale_y_continuous(limits = c(0,200000))
+  
+  p4 <- df %>%
+    ggplot(aes(avg_rating_of_driver, fill = churn)) +
+    geom_bar() +
+    theme(legend.position = "none") +
+    scale_y_continuous(limits = c(0,200000))
+  
+  p5 <- df %>%
+    ggplot(aes(avg_surge, fill = churn)) +
+    geom_density() +
+    theme(legend.position = "none")
+  
+  df <- df %>% mutate(surge_or_not = ifelse(avg_surge==1,"not_surged","surged"))
+  df %>%
+    ggplot(aes(surge_or_not, fill = churn)) +
+    geom_bar() +
+    theme(legend.position = "none")
+  
+  p6 <- df %>%
+    ggplot(aes(surge_pct, fill = churn)) +
+    geom_density() +
+    theme(legend.position = "none")
+  
+  p7 <- df %>%
+    ggplot(aes(trips_in_first_30_days, fill = churn)) +
+    geom_density(aes(y = (..count..)/sum(..count..))) +
+    theme(legend.position = "none")
+  
+  df <- df %>% mutate(used_or_not = ifelse(trips_in_first_30_days==0,"not_used","used"))
+  df %>% ggplot(aes(used_or_not, fill = churn)) +
+    geom_density(aes(y = (..count..)/sum(..count..))) +
+    theme(legend.position = "none")
+  
+  p8 <- df %>%
+    ggplot(aes(luxury_car_user, fill = churn)) +
+    geom_bar() +
+    theme(legend.position = "none")
+  
+  p9 <- df %>%
+    ggplot(aes(weekday_pct, fill = churn)) +
+    geom_density() +
+    theme(legend.position = "none")
+  
+  df <- df %>% mutate(weekday_bucket = case_when(
+    weekday_pct == 0 ~ "zero",
+    (weekday_pct > 0) & (weekday_pct < 100) ~ "soso",
+    weekday_pct ==100 ~ "everyday"
+  )) 
+  ggplot(df, aes(x = factor(weekday_bucket),fill=churn)) +  
+    geom_bar(aes(y = (..count..)/sum(..count..))) 
+  
+  p10 <- df %>%
+    ggplot(aes(city_value, fill = churn)) +
+    geom_bar(aes(y = (..count..)/sum(..count..))) +
+    theme(legend.position = "none") +
+    facet_wrap(~churn)
+  
+  p11 <- df %>%
+    ggplot(aes(phone, fill = churn)) +
+    geom_bar(aes(y = (..count..)/sum(..count..))) +
+    theme(legend.position = "none") +
+    facet_wrap(~churn)
+  
+  # One of the key points of machine learning for classification is to see the distribution of each feature. 
+  # Based on experience, the more feature's distribution apart from each other, more easier to classify the label right.
+  # Let me remove categorical features and plot distribution only on one column and see (Because the code part is simply change geom_bar to    # geom_density, so here will not include the code instead just results)
+  final <-  multiplot(p2,p3,p4,p5,p6,p7,p9,cols=1)
+  return(final)
+}
+#####
+```
+
+#### Define the problems
+* Classify if a user is going to churn or not
+* Find out the factors are the best for predictors for churn and explian why?
+* Offer the solution to reduce the churn rate for this company a.k.a. Uber
+
+#### Step 1.  Perform any cleaning, exploratory analysis, and/or visualizations to use the provided. data for this analysis.
+
+Install packages
+```{r}
+# Only run the first time
+install.packages(c("ggplot","dplyr","tidyr","tidyverse","plotly","caret","corrplot","pROC","mlbench"))
+```
+Load packages
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(plotly)
+library(caret)
+library(corrplot)
+library(pROC)
+library(mlbench)
+options(scipen = 999, stringsAsFactors=FALSE)   # Avoid automatic scientific notation of numbers
+```
+
+
+```{r}
+df <- read.csv(file="churn.csv", header=TRUE, sep=",")
+# gather city and phone type from wide format to long format
+df <- df %>% 
+  mutate(city = case_when(
+    (city_Astapor == 1) ~ "Astapor",
+    (city_King.s.Landing == 1)  ~ "King",
+    (city_Winterfell == 1) ~ "Winterfell")) %>% 
+  mutate(phone = case_when(
+    (phone_Android == 1)  ~ "Android",
+    (phone_iPhone == 1) ~ "iPhone",
+    (phone_no_phone == 1) ~ "Other")) %>% 
+  mutate(churn=ifelse(churn==1,"churned","not_churned"))
+df <- subset(df, select = -c(city_Astapor:phone_no_phone))
+head(df)
+```
+```{r}
+## summary datasets to get a sense of data distribution.
+summary(df)
+## check data type
+str(df)
+## check missing value
+sum(is.na(df))
+```
+I got some sense of what data type this dataset has and there is no missing value. You guys are so nice.
+
+Next, check the distribution of churn and each feature to get a better sense. The code below is for the distribution by each feature against with churn or not churn.
+Some of the exploratory code for distribution within churn class I did not show.
+
+```{r}
+p1 <-  df %>%
+  ggplot(aes(churn, fill = churn)) +
+  geom_bar() +
+  theme(legend.position = "none")
+
+p1
+```
+62% of user churned, oops...
+```{r}
+p2 <- df %>%
+  ggplot(aes(avg_dist, fill = churn)) +
+  geom_bar() +
+  theme(legend.position = "none") 
+p2
+```
+It seems some outlier long distantce greater than 50 miles. And a lot of small distant, see if I can visual them
+The max count distance is 2.47 miles
+```{r}
+p3 <- df %>%
+  ggplot(aes(avg_rating_by_driver, fill = churn)) +
+  geom_bar() +
+  theme(legend.position = "none") +
+  scale_y_continuous(limits = c(0,30000)) + facet_grid(~churn)
+p3
+```
+Look like the driver rates customer above the 75% percentile at a 5 stars rating system. And the churned user has higher 5 start rating than non churned user? Interesting. But Churned user has less rating in general. Looks driver don't rate that much.
+```{r}
+p4 <- df %>%
+  ggplot(aes(avg_rating_of_driver, fill = churn)) +
+  geom_bar() +
+  theme(legend.position = "none") +
+  scale_y_continuous(limits = c(0,30000)) + facet_grid(~churn)
+p4
+```
+Rider's rating distribution also above 75% percentile. Both rider and driver rating are not normal distribute. Could it be less sample sizes or people just be nice and rating others very high, or lack or reference experience?
+```{r}
+multiplot(p3,p4,cols=2)
+```
+Set rating by driver and rating of driver side by side, and it seems driver don't like to rate rider compared with rider likes to rate driver. Churned has higer 5 stars rating. 
+```{r}
+p5 <- df %>%
+  ggplot(aes(avg_surge, fill = churn)) +
+  geom_bar() +
+  theme(legend.position = "none") + facet_grid(~churn)
+p5
+```
+It looks like another outlier for surge rate. Wait a second! it's not outlier, it's zero, Let me classify it as surge and non surge.
+```{r}
+df <- df %>% mutate(surge_or_not = ifelse(avg_surge==1,"not_surged","surged"))
+df %>%
+  ggplot(aes(surge_or_not, fill = surge_or_not)) +
+  geom_bar() +
+  theme(legend.position = "none") + facet_grid(~churn)
+```
+More than 60% user not surged (churn + not churn). And it clearly shows churned user don't do surge.
+```{r}
+p6 <- df %>%
+  ggplot(aes(surge_pct, fill = churn)) +
+  geom_bar() +
+  theme(legend.position = "none") + facet_grid(~churn)
+p6
+```
+Same as avg_surge. But the distribution is interesing which most of surge percent are in the low 25% percentile. Too expensive user still care even though time is important.
+```{r}
+p7 <- df %>%
+  ggplot(aes(trips_in_first_30_days, fill = churn)) +
+  geom_bar(aes(y = (..count..)/sum(..count..))) +
+  theme(legend.position = "none") + facet_grid(~churn)
+p7
+```
+20% user don't use the server the first 30 days after signup churned, compared with 10% user who don't churn. Maybe should bucket those by used and not used.
+```{r}
+df <- df %>% mutate(used_or_not_30days = ifelse(trips_in_first_30_days==0,"not_used","used"))
+df %>% ggplot(aes(used_or_not_30days, fill = used_or_not_30days)) +
+  geom_bar(aes(y = (..count..)/sum(..count..))) +
+  theme(legend.position = "none") + facet_grid(~churn)
+```
+35% user (churn + not churn) not used the service as the first 30 days. And interestingly churned user has higher used percent in in whole group.
+```{r}
+p8 <- df %>%
+  ggplot(aes(luxury_car_user, fill = as.factor(luxury_car_user))) +
+  geom_bar(aes(y = (..count..)/sum(..count..))) +
+  theme(legend.position = "none") + facet_grid(~churn)
+p8
+```
+42% user don't get luxury car in churn group! And not churn group is hald and half. I suspect user who get luxury car don't care much about the price rather than the time. But user who just register for fun don't wanna waster money in luxury car.
+```{r}
+p9 <- df %>%
+  ggplot(aes(weekday_pct, fill = churn)) +
+  geom_bar(aes(y = (..count..)/sum(..count..))) +
+  theme(legend.position = "none") + facet_grid(~churn)
+p9
+```
+So intersting. In the chured group, largest percent is 100% , more than 25% every weekday use. Maybe churn user just wanna use the service for a short period of time due to some reason and drop it.
+Let's dig more by bucket the weekday percent
+```{r}
+df <- df %>% mutate(weekday_bucket = case_when(
+  weekday_pct == 0 ~ "zero",
+  (weekday_pct > 0) & (weekday_pct < 100) ~ "soso",
+  weekday_pct ==100 ~ "everyday"
+)) 
+ggplot(df, aes(x = factor(weekday_bucket),fill=churn)) +  
+  geom_bar(aes(y = (..count..)/sum(..count..))) 
+```
+Confirmed, 30% every day user and 20% no user user (CHURN POTENTIAL ALART!!) 
+```{r}
+p10 <- df %>%
+  ggplot(aes(city, fill = churn)) +
+  geom_bar(aes(y = (..count..)/sum(..count..))) +
+  theme(legend.position = "none")  + facet_grid(~churn)
+p10
+```
+King in churn has much less churn than other citeis. In total, Winterfell has 46% rider and King.slanding has 20% rider ( churn + nonchurn ). But since this is a corort of user, we see if location are important or not later. Seems are three location are psdo locations can't find on google maps.
+```{r}
+p11 <- df %>%
+  ggplot(aes(phone, fill = churn)) +
+  geom_bar(aes(y = (..count..)/sum(..count..))) +
+  theme(legend.position = "none") + facet_grid(~churn)
+p11
+```
+In churn and not churn class, more iPhone user than Android. 69% of iPhone user and 30% Android user in totaoly.
+
+One of the key point of machine learning for classification is to see the distribution of each feature. 
+Based on experience, the more feature's distribution apart from each other, more easier to classify the label right.
+Let me remove categorical features and plot distribution only on one column and see
+```{r}
+see_distribution() 
+```
+Seems most of the features distribution on the either low end or high end. But witin churn and not churn, distribution of one feature are together.  I'm more looking for feature's distribution can separate churn and not churn. May not be a good sign here.
+
+
+Correlation analysis for find the high nad low correlated features
+```{r}
+num <- c("avg_dist","avg_rating_by_driver","avg_rating_of_driver","avg_surge","surge_pct","trips_in_first_30_days","weekday_pct")
+df_num <- select(df, one_of(num))
+corrplot(cor(df_num, use="complete.obs"),type="lower")
+```
+Seems avg_dist has some small negetive corrleation with all other numeric features, and weekday has some positive correlation with avg_surge and surge_pct.
+
+All the features are less correlated except avg_surge and surge_pct, good sign. Maybe later more easy to capture churn or not churn.
+
+
+
+#### Step 2. Build a predictive model to help determine whether or not a user will churn.
+In this step, I'm going to use two machine learning models to predict churn or not churn.
+Along with step 2, there are some step 3. Evaluate the model in the process, in order to explain the performance of models and models comparison.
+```{r}
+require(caret)
+## formating some features
+names(df)
+# [1] "avg_dist"               "avg_rating_by_driver"   "avg_rating_of_driver"  
+# [4] "avg_surge"              "surge_pct"              "trips_in_first_30_days"
+# [7] "luxury_car_user"        "weekday_pct"            "churn"                 
+# [10] "city"                   "phone"                  "surge_or_not"          
+# [13] "used_or_not_30days"      "weekday_bucket"  
+cols <- c("luxury_car_user", "city", "phone", "surge_or_not","used_or_not_30days" , "weekday_bucket" ,"churn")
+df[cols] <- lapply(df[cols], factor)
+cols_num <- c("avg_dist", "avg_rating_by_driver", "avg_rating_of_driver", "avg_surge","surge_pct" , "trips_in_first_30_days" ,"weekday_pct")
+df[cols_num] <- lapply(df[cols_num], as.numeric)
+
+# Move churn to the last column, otherwise hard to see
+col_idx <- grep("churn", names(df))
+df <- df[, c( (1:ncol(df))[-col_idx], col_idx)]
+```
+Partition the dataset to training and testing sets
+Let's do 80:20, 80% for trining, 20% for testing
+```{r}
+trainIndex <- createDataPartition(df$churn, p = 0.8, 
+                                  list = FALSE, 
+                                  times = 1)
+head(trainIndex)
+df_train <- df[ trainIndex,]
+df_test  <- df[-trainIndex,]
+```
+Start to build the model
+```{r, include=FALSE}
+control <- trainControl(method="cv", classProbs = TRUE, number=5, summaryFunction=twoClassSummary)
+seed <- 1
+metric <- "ROC"
+set.seed(seed)
+# mtry <- sqrt(ncol(df))
+# tunegrid <- expand.grid(.mtry=mtry)
+# gbmGrid <-  expand.grid(interaction.depth = c(1, 5, 9), 
+#                         n.trees = (1:30)*50, 
+#                         shrinkage = 0.1,
+#                         n.minobsinnode = 20)
+gbm_default <- train(churn~., data=df_train, method="gbm", metric=metric, trControl=control)
+print(gbm_default)
+# Stochastic Gradient Boosting 
+# 
+# 40001 samples
+#    13 predictor
+#     2 classes: 'churned', 'not_churned' 
+# 
+# No pre-processing
+# Resampling: Cross-Validated (5 fold) 
+# Summary of sample sizes: 32001, 32000, 32001, 32000, 32002 
+# Resampling results across tuning parameters:
+# 
+#   interaction.depth  n.trees  ROC        Sens       Spec     
+#   1                   50      0.8226772  0.8872459  0.5602904
+#   1                  100      0.8342703  0.8770284  0.5993089
+#   1                  150      0.8391937  0.8704170  0.6213777
+#   2                   50      0.8385264  0.8703769  0.6169236
+#   2                  100      0.8459340  0.8583562  0.6504257
+#   2                  150      0.8487931  0.8589974  0.6576714
+#   3                   50      0.8438442  0.8636852  0.6360681
+#   3                  100      0.8488437  0.8597987  0.6571393
+#   3                  150      0.8510637  0.8616018  0.6601305
+# 
+# Tuning parameter 'shrinkage' was held constant at a value of 0.1
+# Tuning parameter
+# 'n.minobsinnode' was held constant at a value of 10
+# ROC was used to select the optimal model using  the largest value.
+# The final values used for the model were n.trees = 150, interaction.depth = 3, shrinkage = 0.1
+# and n.minobsinnode = 10.
+```
+After calculting ROC, let's plot it and calculate AUC.
+```{r}
+plot(gbm_default)
+```
+Due to run time constrain, here didn't use k-fold cross-validation. So only choose simple cross validation with less iterations.
+Also I did not tune the parameter by grid searching due to time limit.
+```{r}
+set.seed(1)
+pt_gbm <- predict(gbm_default, newdata = df_test)
+confusionMatrix(pt_gbm, df_test$churn)
+```
+We got 78% accuracy.
+```{r}
+set.seed(1)
+gbm_probs <- predict(gbm_default, newdata = df_test, type = "prob")
+gbm_ROC <- roc(predictor=gbm_probs$churned,
+               response=df_test$churn,
+               levels=rev(levels(df_test$churn)))
+gbm_ROC$auc
+```
+The Area under the curve (AUC) is around 0.85, which is not bad.
+```{r}
+plot(gbm_ROC,main="GBM ROC")
+```
+ROC calcualted by sensitivity (True positive)/specificity (False positive). We want ROC higher and AUC (under curve area) greater.
+```{r}
+hist1 <- histogram(~gbm_probs$churned|df_test$churn,xlab="Probability of Churn, GBM",ylim = c(0,30))
+hist1
+```
+The histogram of probability distribution of churn or not churn users. 
+Seems the model predicts well (high probability) of churn user.
+Let's try another model xgboost in caret package.
+```{r, include=FALSE}
+control <- trainControl(method="cv", classProbs = TRUE, number=5, summaryFunction=twoClassSummary)
+seed <- 1
+metric <- "ROC"
+set.seed(seed)
+# mtry <- sqrt(ncol(df))
+# tunegrid <- expand.grid(.mtry=mtry)
+xgb_default <- train(churn~., data=df_train, method="xgbTree", metric=metric, trControl=control)
+print(xgb_default)
+```
+After iteraction of calculating ROC, let's plot them and calculate AUC.
+```{r}
+plot(xgb_default)
+```
+
+```{r}
+pt_xgb <- predict(xgb_default, newdata = df_test)
+confusionMatrix(pt_xgb, df_test$churn)
+```
+```{r}
+set.seed(1)
+xgb_probs <- predict(xgb_default, newdata = df_test, type = "prob")
+xgb_ROC <- roc(predictor=xgb_probs$churned,
+               response=df_test$churn,
+               levels=rev(levels(df_test$churn)))
+xgb_ROC$auc
+```
+The area under the curve is around 0.85, a little higer than gbm
+```{r}
+plot(xgb_ROC,main="XGBBOOST ROC")
+```
+ROC calcualted by sensitivity (True positive)/specificity (False positive). We want ROC higher and AUC (under curve area) greater.
+```{r}
+hist2 <- histogram(~xgb_probs$churned|df_test$churn,xlab="Probability of Churn, XGBOOST",ylim = c(0,30))
+hist2
+```
+Seems the model predicts was very similar compared with gbm for predicting churn. And more blue area in the high end of churn category.
+
+
+#### Step 3. Evalution the model
+Some parts of this step has been done the step2.
+We need do a side by side comparison.
+We need to figure out if the two method results are statistical different. So we first collect the resampling results using resamples.
+```{r}
+set.seed(1)
+resamps <- resamples(list(GBM = gbm_default,
+                          XGBBOOST = xgb_default))
+summary(resamps)
+trellis.par.set(caretTheme())
+dotplot(resamps, metric = "ROC")
+```
+We can see some overlapping sometime (if set seed) on the error bar which can indicate not significant different. In terms of magnitude of values, the ROC values are not different.
+
+In conclusion of step 2 and step 3, the xgboost is slight better than gmb on AUC and ROC. 
+
+The histogram also shows a relative lift on the probability on churn prediction by XGBOOST.
+
+**Alternative models you have considered. Why are they not good enough?**
+
+I also tried random forest RF (results below), but the ROC value is lower those gbm abd xgboost.
+```{r}
+# Random Forest
+#
+# 40001 samples
+# 13 predictors
+# 2 classes: 'churned', 'not_churned'
+#
+# No pre-processing
+# Resampling: Cross-Validated (5 fold)
+# Summary of sample sizes: 32001, 32000, 32001, 32001, 32001
+# Resampling results across tuning parameters:
+#
+# mtry  ROC        Sens       Spec
+# 2    0.8324291  0.8775095  0.6093455
+# 9    0.8360655  0.8461755  0.6583351
+# 16   0.8246700  0.8219739  0.6617914
+#
+# ROC was used to select the optimal model using  the largest value.
+# The final value used for the model was mtry = 9.
+```
+I didn't include random forest code here because it takes long hours to run.
+It appears in the default setting, gbm and xgboost are better than random forest in this case.
+The reason is more trees from random forest will cause better results by reduce variance, but also more computationally expensive.
+In general, I found random forest is slow than gbm.
+If I have more time to try out, random forest maybe good because it only has one parameter to tune, the number of features to randomly select at each node in the caret package.
+However, Boosted Trees is getting popular in Kaggle because it add new trees that compliment the already built ones and this can give you better accuracy with less trees.It fast generate some weak leaner (tree) which make it faster.
+xgboost used a more regularized model compared with gbm to control over-fitting, which gives it better performance. Although it's over specialization, after test I found the speed and results are okay for xgboost. No wonder people used it frequently in Kaggle competition.
+
+
+#### Step 4. Identify / interpret features that are the most influential in affecting your predictions.
+
+UP to this point, I just throw each things on the wall and see if the mud will stick.
+It's time to take a close look that which parameters are actually important.
+And I used xgbTree based on previous conclusion that xgb is better than random forest in this case. 
+
+Now I need to Feature Ranking
+```{r, eval=FALSE, include=FALSE}
+# prepare training scheme
+control <- trainControl(method="cv", number=5)
+# train the model
+set.seed(1)
+model <- train(churn~., data=df_train, method="xgbTree",  trControl=control,  importance = TRUE)
+# Here only used training dataset is because to get an unbiased performance estimate,
+# It's better to not use the whole dataset which including test dataset for feature selection.
+importances <- varImp(model, scale=FALSE)
+print(importances)
+# xgbTree variable importance
+# 
+#                          Overall
+# avg_rating_by_driver   0.2391033
+# surge_pct              0.1729774
+# cityKing               0.1452359
+# weekday_pct            0.1424269
+# phoneiPhone            0.0854658
+# luxury_car_user1       0.0692569
+# trips_in_first_30_days 0.0675885
+# avg_dist               0.0336357
+# cityWinterfell         0.0193891
+# avg_rating_of_driver   0.0158650
+# avg_surge              0.0082856
+# phoneOther             0.0007699
+# surge_or_notsurged     0.0000000
+# used_or_not_30daysused 0.0000000
+# weekday_bucketzero     0.0000000
+# weekday_bucketsoso     0.0000000
+
+```
+Suprisingly, the top five important feature selected are avg_rating_by_driver, surge_pct,cityKing, iPhone
+**avg_rating_by_driver**: some churn user had reviered more 5 star rating compared with not-churn user. So user churn because afraid of not meet driver's high expection ? It may not be the case. Keep looking.
+**surge_pct**: Higer 0% surge_prc in churn class which indicates those people not use surge may more likely to churn.
+**cityKing**: In the churn class, city KinginLang has low churn rate compared with other two citys.
+**weekday_pct**: the distribution are different compared churn and not churn. Again churn has high 100% use percent which is intersting.
+**iPhone**: big percent in churn calss, could be the rider app is more easy for iPhone user to signup? More marketing on iPhone user?
+```{r}
+plot(importances)
+```
+Let me try feature selection by using another method
+```{r, eval=FALSE, include=FALSE}
+set.seed(1)
+control <- rfeControl(functions=rfFuncs, method="cv", number=5)
+results <- rfe(df_train[,1:13], df_train[,14], sizes=c(1:13), rfeControl=control)
+print(results)
+# Recursive feature selection
+# 
+# Outer resampling method: Cross-Validated (5 fold) 
+# 
+# Resampling performance over subset size:
+#   
+#   Variables Accuracy  Kappa AccuracySD  KappaSD Selected
+# 1   0.6771 0.2433   0.002985 0.006712         
+# 2   0.6830 0.2344   0.002221 0.005947         
+# 3   0.6970 0.3132   0.006547 0.033066         
+# 4   0.7543 0.4706   0.003631 0.007449         
+# 5   0.7715 0.4995   0.005140 0.011641         
+# 6   0.7746 0.5107   0.003977 0.008867         
+# 7   0.7786 0.5174   0.005736 0.012705         
+# 8   0.7815 0.5223   0.004915 0.011063         
+# 9   0.7822 0.5256   0.004385 0.010236         
+# 10   0.7835 0.5279   0.004394 0.010693         
+# 11   0.7840 0.5284   0.003904 0.009118         
+# 12   0.7843 0.5289   0.003785 0.008923        *
+# 13   0.7839 0.5274   0.003549 0.008154       
+```
+This method run too long so I set `eval=FALSE`
+
+The top 5 variables (out of 12 features):
+`city, phone, luxury_car_user, avg_rating_by_driver, weekday_bucket` list the chosen features.
+
+```{r}
+plot(results, type=c("g", "o"))
+```
+Based on the "eblow" rules, we choose the top 5 features.
+Compared both xbgboost and random forest selected feastures, `city, phone, avg_rating_by_driver, weekday_bucket are common`.
+But I also want to add `luxury_car_user` and `surge_pct` since those two features' distribution are more separate and may be able to help to classify churn and not churn well.
+
+So use those six features to predit again.
+```{r}
+control <- trainControl(method="cv", classProbs = TRUE, number=5, summaryFunction=twoClassSummary)
+seed <- 1
+metric <- "ROC"
+set.seed(seed)
+xgb_select <- train(churn~ city + phone + avg_rating_by_driver + weekday_bucket + luxury_car_user + surge_pct, data=df_train, method="xgbTree", metric=metric, trControl=control)
+print(xgb_select)
+# ROC is about 0.81
+```
+Then get confusion Matrix again to see the accuracy
+```{r}
+pt_select <- predict(xgb_select, newdata = df_test)
+confusionMatrix(pt_select, df_test$churn)
+```
+The accuracy is round 0.76
+```{r}
+xgb_probs <- predict(xgb_select, newdata = df_test, type = "prob")
+xgb_ROC <- roc(predictor=xgb_probs$churned,
+               response=df_test$churn,
+               levels=rev(levels(df_test$churn)))
+xgb_ROC$auc
+```
+The AUC is around 0.82, and slight drop but still ok.
+```{r}
+hist3 <- histogram(~xgb_probs$churned|df_test$churn,xlab="Probability of Churn by selected feature, XGBOOST",ylim = c(0,35))
+hist3
+```
+When look at the new histogram distribution on churn, seems not as good as before. More features still be better than less features in XGBOOST in such case.
+
+I get a sense of I can use other methods to conduct feature selection such as PCA. However, as this point, it seems the amount of the features is still helpful to improve the AUC value based on the dataset amount. 
+
+
+#### Step 5. Discuss the validity of the model
+
+The machine learning model for classifying churn is XGBOOST. It reaches accucary 0.78 and AUC 0.86.
+The reduced features prediction by xgboost may not help improving the prediction accuracy at this point. In general, I believe this model can be use as a starting point for predicting churn or not churn for this ride-share company. However, if I have more time, I will take a close look on the ROC for individual user, which is the posterior distribution for each user. If we can success predict the churn in a particular corhort users, we may get more accurate prediction of churn.
+
+With the important feature, `city, phone, avg_rating_by_driver, weekday_prc, surg_prc, luxury_car_user`, the model can reach a reseasoble prediction posibility. We can use this model to predict the next 30 days if a user is going to churn or not by at least 76% accuracy!
+If we use all feature, we can improve this prediction accuracy to 79%.
