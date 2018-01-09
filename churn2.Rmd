@@ -1,8 +1,8 @@
 ---
 title: "Churn Prediction"
 output:
-  html_document: default
   html_notebook: default
+  html_document: default
   pdf_document: default
 ---
 A San Francisco-based ride sharing company is interested in predicting rider churn. To help explore this question, we have
